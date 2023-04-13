@@ -60,6 +60,9 @@ Trigger Setting</string>
              <property name="checked">
               <bool>true</bool>
              </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup_2</string>
+             </attribute>
             </widget>
            </item>
            <item>
@@ -67,6 +70,9 @@ Trigger Setting</string>
              <property name="text">
               <string>Burst</string>
              </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup_2</string>
+             </attribute>
             </widget>
            </item>
            <item>
@@ -74,6 +80,9 @@ Trigger Setting</string>
              <property name="text">
               <string>External</string>
              </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup_2</string>
+             </attribute>
             </widget>
            </item>
           </layout>
@@ -117,6 +126,9 @@ Trigger Setting</string>
              <property name="checked">
               <bool>true</bool>
              </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup</string>
+             </attribute>
             </widget>
            </item>
            <item>
@@ -124,6 +136,9 @@ Trigger Setting</string>
              <property name="text">
               <string>External</string>
              </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup</string>
+             </attribute>
             </widget>
            </item>
           </layout>
@@ -477,4 +492,8 @@ Commands:
  </widget>
  <resources/>
  <connections/>
+ <buttongroups>
+  <buttongroup name="buttonGroup"/>
+  <buttongroup name="buttonGroup_2"/>
+ </buttongroups>
 </ui>

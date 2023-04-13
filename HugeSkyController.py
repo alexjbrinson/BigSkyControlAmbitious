@@ -89,7 +89,7 @@ class MyTableWidget(QWidget):
     self.homeTab.buttons[i].setEnabled(False)
   def closeTab(self,i):
     comport=self.tabs.widget(i).comPort
-    self.homeTab.text.append("Closing tab %d aka com%d"%(i,comport))
+    self.homeTab.text.append("Closing tab %d aka com%s"%(i,comport))
     self.tabs.widget(i).safeExit()
     self.tabs.removeTab(i)
     for j in range(len(self.homeTab.buttons)): #I don't have a good way of identifying which tab number corresponds to which laser...
