@@ -11,7 +11,7 @@ qtCreatorFile = "GuiBigSkyWidget.ui" # Enter file here.
 Ui_Widget, QtBaseClass = uic.loadUiType(qtCreatorFile)
  
 class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
-  def __init__(self, cPort=-1, label=''):
+  def __init__(self, cPort=-1, labelString=''):
     self.comPort = cPort
 
     self.calibrationFilePresent=False #TODO: check for calibration file based on laser head serial number
@@ -85,7 +85,7 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
 
     #Initializing GUI values
     if self.serialConnected:
-      self.fetchSerial(); self.label.setText("BIG SKY " + str(self.comPort) + " LASER CONTROL")
+      self.fetchSerial(); self.label.setText(labelString)#("BIG SKY " + str(self.comPort) + " LASER CONTROL")
       self.update_fLampMode(self.ser)
       self.update_qSwitchMode(self.ser)
       #self.update_fLampValues(self.ser)
@@ -95,7 +95,7 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
       self.temperatureOutput.setText(str(temp)+" C")#
       self.lastUpdateOutput.setText(str(tiempo))#
       self.updateFreq(self.ser)
-    else: self.label.setText("Laser not found. This is a dummy GUI")
+    else: self.label.setText("Laser not found. This is a dummy GUI\n"+labelString)
 
     #self.qSwitchActivationButton.setEnabled(self.activeStatus and self.shutterStatus)
     self.frequencyDoubleSpinBox.setEnabled(not(self.flashLampMode));
@@ -367,16 +367,15 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     elif self.qSwitchMode==2: self.qSwitchRadioButton_2.setChecked(True)
     else: print("ERROR. self.qSwitchMode makes no sense");serport.flush();serport.write(b'>s\n'); serport.read(140).decode('utf-8');
 
-  def safeExit():
+  def safeExit(self):
     print(">s")
     if self.serialConnected:
-      #serport=self.ser
-      #print(serport)
       self.ser.flush(); self.ser.write(b'>s\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)
+      self.ser.close()
 
 if __name__ == "__main__":
   app = QtWidgets.QApplication(sys.argv)
-  app.aboutToQuit.connect(SingleLaserController.safeExit)
   window = SingleLaserController()
+  app.aboutToQuit.connect(window.safeExit)
   window.show()
   sys.exit(app.exec_())

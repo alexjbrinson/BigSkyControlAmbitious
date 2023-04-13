@@ -44,8 +44,6 @@ for i in range(10):
 window.setLayout(layout)
 window.show()
 app.exec()
-
-
 '''
 
 #written by Alex Brinson (brinson@mit.edu, alexjbrinson@gmail.com) on behalf of EMA Lab
@@ -79,7 +77,6 @@ class MainWindow(QMainWindow):
       self.buttons+=[QPushButton('launch com %d'%i)]
       layout.addWidget(self.buttons[i])
       self.buttons[i].pressed.connect(lambda i=i: self.start_process(i))
-
       try:
         ser = serial.Serial("COM"+str(i),9600,timeout=1)
         print('trying com port %d'%i)
@@ -88,12 +85,10 @@ class MainWindow(QMainWindow):
         self.buttons[i].setEnabled(False)
       else:
         print("i="+str(i)+" maybe this one?")
-        ser.flush(); ser.write(b'>cg\n')
+        ser.flush(); ser.write(b'>sn\n')
         response = ser.read(140).decode('utf-8'); print("response:", response)
-        if 'temp'in response:
-          print("yeah this one.");
-          temp=float(response.strip('\r\ntemp.CG d'))#
-          tiempo = time.strftime("%d %b %Y %H:%M:%S",time.localtime())#
+        if 'number'in response:
+          print("yeah this one."); ser.close()
 
     # self.btn = QPushButton("Execute")
     # self.btn.pressed.connect(self.start_process)
