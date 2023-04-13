@@ -12,33 +12,28 @@ Ui_Widget, QtBaseClass = uic.loadUiType(qtCreatorFile)
  
 class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
   def __init__(self, cPort=-1, labelString=''):
+    super().__init__()
+    self.setupUi(self)
     self.comPort = cPort
 
     self.calibrationFilePresent=False #TODO: check for calibration file based on laser head serial number
 
     #Testing different possible serial ports to see if any of them is a Big Sky laser. If ">cg" evokes a temperature readout, we found a live one.
     self.serialConnected = False
-    for i in range(10):
+    if self.comPort!=-1:
       try:
-        self.ser = serial.Serial("COM"+str(i),9600,timeout=1)
+        self.ser = serial.Serial(self.comPort,9600,timeout=1); self.updateTemp()
+        tiempo = time.strftime("%d %b %Y %H:%M:%S",time.localtime())#
+        self.terminalOutputTextBrowser.append('Connection established at '+str(tiempo))
+        self.serialConnected=True
+        self.dangerMode = True
       except:
-        print("i="+str(i)+" not this one")
-      else:
-        print("i="+str(i)+" maybe this one?")
-        self.ser.flush(); self.ser.write(b'>cg\n')
-        response = self.ser.read(140).decode('utf-8'); print("response:", response)
-        if 'temp'in response:
-          print("yeah this one.");
-          temp=float(response.strip('\r\ntemp.CG d'))#
-          tiempo = time.strftime("%d %b %Y %H:%M:%S",time.localtime())#
-          
-          self.serialConnected=True
-          break
-
-    self.dangerMode = True
+        self.terminalOutputTextBrowser.append('Connection failed... Investigate if this ever happens')
+        
     if self.serialConnected==False:
       print("Error: Laser not found. Ensure laser is on and check serial port connection.")
       self.fLampVoltage=-1
+      self.serialNumber=''
       #quit()
 
     #Initializing dummy values. These are updated to true laser settings once all widgets are connected, so they can be updated too.
@@ -47,9 +42,22 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.terminalEnabled = False
     self.proposedEnergy = 7; self.proposedVoltage = 500; self.proposedFrequency = 0
 
-    super().__init__()
-    self.setupUi(self)
+   #Initializing GUI values
+    if self.serialConnected:
+      self.fetchSerial(); self.label.setText(labelString)#("BIG SKY " + str(self.comPort) + " LASER CONTROL")
+      self.update_fLampMode()
+      self.update_qSwitchMode()
+      #self.update_fLampValues()
+      self.update_fLampVoltage()
+      self.update_fLampEnergy()
+      self.lastUpdateOutput.setText(str(tiempo))#
+      self.updateFreq()
+    else: self.label.setText("Laser not found. This is a dummy GUI\n"+labelString)
 
+    self.frequencyDoubleSpinBox.setEnabled(not(self.flashLampMode));
+    self.frequencyConfirmationButton.setEnabled(not(self.flashLampMode))
+
+    #Connecting signals to slots
     self.frequencyDoubleSpinBox.valueChanged.connect(self.setFrequency)
     self.frequencyDoubleSpinBox.editingFinished.connect(self.setFrequency)
     self.qSwitchRadioButton_0.clicked.connect(self.setQSwitchInternal)
@@ -61,6 +69,7 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.flashLampVoltageLineEdit.returnPressed.connect(self.confirmVoltageSetting)
     self.frequencyConfirmationButton.clicked.connect(self.confirmFrequencySetting)
     self.stopButton.clicked.connect(self.stopLaser)
+    self.laserSaveButton.clicked.connect(self.saveLaserSettings)
 
     self.toggleInputButton.clicked.connect(self.toggleTerminalInput)
     self.terminalInputLineEdit.textChanged.connect(self.updateTerminalCommand)
@@ -71,88 +80,73 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     try:
       cwd = os.getcwd()
       if self.serialConnected:
-        self.fetchSerial(); 
-        self.calibData=np.loadtxt(cwd+"\\self.CalibrationDataBigSky"+str(self.comPort)+".csv",dtype="float",comments='#',delimiter=',')
+        self.calibData=np.loadtxt(cwd+"\\CalibrationDataBigSky"+str(self.serialNumber)+".csv",dtype="float",comments='#',delimiter=',')
       else: 
-        self.calibData=np.loadtxt(cwd+"\\self.CalibrationDataBigSky.csv",dtype="float",comments='#',delimiter=',')
+        self.calibData=np.loadtxt(cwd+"\\CalibrationDataBigSky.csv",dtype="float",comments='#',delimiter=',')
       self.calibVolts = self.calibData[:,0]; self.calibPower = self.calibData[:,1]
       self.calibrationFilePresent=True
     except:
       defaultCalibVolts=[800,900,950,1000,1050,1080]
       defaultCalibPower=[0.05,1.54,3.09,4.73,6.14,6.78]
     if self.calibrationFilePresent: print("self.calibration file loaded successfully")
-    else: print("failed to load self.calibration file"); self.calibVolts=defaultCalibVolts; self.calibPower=defaultCalibPower
-
-    #Initializing GUI values
-    if self.serialConnected:
-      self.fetchSerial(); self.label.setText(labelString)#("BIG SKY " + str(self.comPort) + " LASER CONTROL")
-      self.update_fLampMode(self.ser)
-      self.update_qSwitchMode(self.ser)
-      #self.update_fLampValues(self.ser)
-      self.update_fLampVoltage(self.ser)
-      self.update_fLampEnergy(self.ser)
-      #self.updateTemp(self.ser) #todo get this from serialport test
-      self.temperatureOutput.setText(str(temp)+" C")#
-      self.lastUpdateOutput.setText(str(tiempo))#
-      self.updateFreq(self.ser)
-    else: self.label.setText("Laser not found. This is a dummy GUI\n"+labelString)
-
-    #self.qSwitchActivationButton.setEnabled(self.activeStatus and self.shutterStatus)
-    self.frequencyDoubleSpinBox.setEnabled(not(self.flashLampMode));
-    self.frequencyConfirmationButton.setEnabled(not(self.flashLampMode))
-
-    self.PowerEstimateValue.setText('%.2f'%np.interp(self.fLampVoltage,self.calibVolts,self.calibPower)+" W")
+    else: print("failed to load self.calibration file"); self.calibVolts=defaultCalibVolts; self.calibPower=defaultCalibPower 
+    self.PowerEstimateValue.setText('%.2f'%np.interp(self.fLampVoltage,self.calibVolts,self.calibPower)+" W")   
 
   def setFrequency(self):
     self.proposedFrequency = float(self.frequencyDoubleSpinBox.value())
-    #TODO set self.frequency on hardware
-    #print("frequencyDoubleSpinBox valueChanged")
     
   def confirmFrequencySetting(self):
-    #toWrite = ">f{freq}\n".format(freq = str(0)+str(int(self.proposedFrequency*100)) if self.proposedFrequency<10 else str(int(self.proposedFrequency*100)) )
     toWrite = ">f{freq}\n".format(freq = str(int(self.proposedFrequency*100)) )
     self.terminalOutputTextBrowser.append(">f{freq}".format(freq = str(int(self.proposedFrequency*100)) ))#this is just a test feature
     if self.serialConnected:
       self.ser.flush(); self.ser.write(bytes(toWrite,"utf-8") ); response = self.ser.read(140).decode('utf-8'); self.frequency=float(response.strip('\r\nfreq. Hz'));
       self.frequencyDoubleSpinBox.setValue(self.frequency); print("self.frequency = {f}Hz".format(f=self.frequency))
       self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
-      self.updateTemp(self.ser) 
+      self.updateTemp() 
 
-  def updateFreq(self, serport):
+  def updateFreq(self):
     self.terminalOutputTextBrowser.append('>f')
-    serport.flush();serport.write(b'>f\n')
-    response = serport.read(140).decode('utf-8'); self.frequency=float(response.strip('\r\nfreq. Hz'));
+    self.ser.flush();self.ser.write(b'>f\n')
+    response = self.ser.read(140).decode('utf-8'); self.frequency=float(response.strip('\r\nfreq. Hz'));
     self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
     print("self.frequency = {f}Hz".format(f=self.frequency))
     self.frequencyDoubleSpinBox.setValue(self.frequency)
+
+  def saveLaserSettings(self):
+    self.terminalOutputTextBrowser.append('>sav1')
+    if self.serialConnected:
+      self.ser.flush(); self.ser.write(b'>sav1\n')
+      response = self.ser.read(140).decode('utf-8')
+      self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
+    print("Laser settings saved")
 
   '''NOTE: These can only be changed while laser is in standby (>s). The GUI should now reproduce this behavior'''
   def setQSwitchInternal(self):
     self.qSwitchMode = 0; print(">qsm0")
     if self.serialConnected:
-      self.ser.flush(); self.ser.write(b'>qsm0\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp(self.ser)
+      self.ser.flush(); self.ser.write(b'>qsm0\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp()
       self.terminalOutputTextBrowser.append('>qsm0'); self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>")
   def setQSwitchBurst(self):
     self.qSwitchMode = 1; print(">qsm1")
     if self.serialConnected:
-      self.ser.flush(); self.ser.write(b'>qsm1\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp(self.ser)
+      self.ser.flush(); self.ser.write(b'>qsm1\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp()
       self.terminalOutputTextBrowser.append('>qsm1'); self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
   def setQSwitchExternal(self):
     self.qSwitchMode = 2; print(">qsm2")
     if self.serialConnected:
-      self.ser.flush(); self.ser.write(b'>qsm2\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp(self.ser)
+      self.ser.flush(); self.ser.write(b'>qsm2\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp()
       self.terminalOutputTextBrowser.append('>qsm2'); self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
   def setFlashLampInternal(self):
     self.flashLampMode = 0; print(">lpm0")
     self.frequencyDoubleSpinBox.setEnabled(not(self.flashLampMode)); self.frequencyConfirmationButton.setEnabled(not(self.flashLampMode))
     if self.serialConnected:
-      self.ser.flush(); self.ser.write(b'>lpm0\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp(self.ser)
+      self.ser.flush(); self.ser.write(b'>lpm0\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp()
       self.terminalOutputTextBrowser.append('>lpm0'); self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
   def setFlashLampExternal(self):
     self.flashLampMode = 1; print(">lpm1")
     self.frequencyDoubleSpinBox.setEnabled(not(self.flashLampMode)); self.frequencyConfirmationButton.setEnabled(not(self.flashLampMode))
     if self.serialConnected:
-      self.ser.flush(); self.ser.write(b'>lpm1\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp(self.ser)
+      self.ser.flush(); self.ser.write(b'>lpm1\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)#; self.updateTemp()
       self.terminalOutputTextBrowser.append('>lpm1'); self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
 
   def confirmVoltageSetting(self):
@@ -173,8 +167,8 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
         print("voltage = {V}V".format(V=self.fLampVoltage))
         self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
         self.flashLampVoltageLineEdit.setText(str(self.fLampVoltage))
-        self.update_fLampEnergy(self.ser)
-        self.updateTemp(self.ser)
+        self.update_fLampEnergy()
+        self.updateTemp()
       else: self.fLampVoltage=self.proposedVoltage     
       self.PowerEstimateValue.setText('%.2f'%np.interp(self.fLampVoltage,self.calibVolts,self.calibPower) + " W")  
     else:
@@ -273,12 +267,12 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     if self.terminalEnabled:
       self.terminalEnabled=False;
       self.stopLaser(); #self.lampActivationButton.setEnabled(True); #self.shutterButton.setEnabled(True)
-      self.update_fLampMode(self.ser)
-      self.update_qSwitchMode(self.ser)
-      self.update_fLampVoltage(self.ser)
-      self.update_fLampEnergy(self.ser)
-      self.updateTemp(self.ser)
-      self.updateFreq(self.ser)
+      self.update_fLampMode()
+      self.update_qSwitchMode()
+      self.update_fLampVoltage()
+      self.update_fLampEnergy()
+      self.updateTemp()
+      self.updateFreq()
     else:
       self.terminalEnabled=True;
       #self.lampActivationButton.setEnabled(False)#self.shutterButton.setEnabled(False); self.qSwitchActivationButton.setEnabled(False); self.singlePulseButton.setEnabled(False);
@@ -297,7 +291,9 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     if self.serialConnected and self.dangerMode:
       self.ser.flush(); self.ser.write(b'>sn\n'); response = self.ser.read(140).decode('utf-8'); print("response:", response)
       self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>")
-    self.comPort = response.strip(' \r\ns/number') #TODO finish this line
+      sn = response.strip(' \r\ns/number')
+    else: sn=''
+    self.serialNumber=sn
 
   def updateTerminalCommand(self,text):
     self.terminalLineCurrently = text
@@ -313,10 +309,10 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.terminalLineCurrently = ''
     self.terminalInputLineEdit.setText(self.terminalLineCurrently)
 
-  def updateTemp(self, serport):
+  def updateTemp(self):
     self.terminalOutputTextBrowser.append('>cg')
-    serport.flush();serport.write(b'>cg\n')
-    response = serport.read(140).decode('utf-8'); temp=float(response.strip('\r\ntemp.CG d'))
+    self.ser.flush();self.ser.write(b'>cg\n')
+    response = self.ser.read(140).decode('utf-8'); temp=float(response.strip('\r\ntemp.CG d'))
     print("temperature = {T}C".format(T=temp))
     self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
     tiempo = time.strftime("%d %b %Y %H:%M:%S",time.localtime())
@@ -324,10 +320,10 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.temperatureOutput.setText(str(temp)+" C")
     self.lastUpdateOutput.setText(str(tiempo))
 
-  def update_fLampVoltage(self, serport):
+  def update_fLampVoltage(self):
     self.terminalOutputTextBrowser.append('>v')
-    serport.flush();serport.write(b'>v\n')
-    response = serport.read(140).decode('utf-8'); self.fLampVoltage=int(response.strip('\r\nvoltage V'))
+    self.ser.flush();self.ser.write(b'>v\n')
+    response = self.ser.read(140).decode('utf-8'); self.fLampVoltage=int(response.strip('\r\nvoltage V'))
     print("voltage = {V}V".format(V=self.fLampVoltage))
     self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
     #self.flashLampVoltageHorizontalSlider.setValue(self.fLampVoltage)
@@ -335,37 +331,37 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
 
     self.PowerEstimateValue.setText('%.2f'%np.interp(self.fLampVoltage,self.calibVolts,self.calibPower) + " W")
     
-  def update_fLampEnergy(self, serport):
+  def update_fLampEnergy(self):
     self.terminalOutputTextBrowser.append('>ene')
-    serport.flush();serport.write(b'>ene\n')
-    response = serport.read(140).decode('utf-8'); self.fLampEnergy=float(response.strip('\r\nenergy J'))
+    self.ser.flush();self.ser.write(b'>ene\n')
+    response = self.ser.read(140).decode('utf-8'); self.fLampEnergy=float(response.strip('\r\nenergy J'))
     print("energy = {E}J".format(E=self.fLampEnergy))
     self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
     #self.flashLampEnergyHorizontalSlider.setValue(int(10*self.fLampEnergy))
     self.flashLampEnergyValue.setText(str(self.fLampEnergy)+" J")
 
-  def update_fLampMode(self, serport):
+  def update_fLampMode(self):
     self.terminalOutputTextBrowser.append('>lpm')
-    serport.flush();serport.write(b'>lpm\n')
-    response = serport.read(140).decode('utf-8'); self.flashLampMode=int(response.strip('\r\nLP synch :  '))
+    self.ser.flush();self.ser.write(b'>lpm\n')
+    response = self.ser.read(140).decode('utf-8'); self.flashLampMode=int(response.strip('\r\nLP synch :  '))
     print("self.flashLampMode = {f}".format(f=self.flashLampMode))
     self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
     #self.flashLampEnergyHorizontalSlider.setValue(int(10*self.fLampEnergy))
     if self.flashLampMode==0: self.flashLampRadioButton_0.setChecked(True)
     elif self.flashLampMode==1: self.flashLampRadioButton_1.setChecked(True)
-    else: print("ERROR. self.flashLampMode makes no sense");serport.flush();serport.write(b'>s\n'); serport.read(140).decode('utf-8');
+    else: print("ERROR. self.flashLampMode makes no sense");self.ser.flush();self.ser.write(b'>s\n'); self.ser.read(140).decode('utf-8');
 
-  def update_qSwitchMode(self, serport):
+  def update_qSwitchMode(self):
     self.terminalOutputTextBrowser.append('>qsm')
-    serport.flush();serport.write(b'>qsm\n')
-    response = serport.read(140).decode('utf-8'); self.qSwitchMode=int(response.strip('\r\nQS mode :  '))
+    self.ser.flush();self.ser.write(b'>qsm\n')
+    response = self.ser.read(140).decode('utf-8'); self.qSwitchMode=int(response.strip('\r\nQS mode :  '))
     print("self.qSwitchMode = {q}".format(q=self.qSwitchMode))
     self.terminalOutputTextBrowser.append("<p style='color: green'>"+response.strip('\r\n')+"</p>");
     #self.flashLampEnergyHorizontalSlider.setValue(int(10*self.fLampEnergy))
     if self.qSwitchMode==0: self.qSwitchRadioButton_0.setChecked(True)
     elif self.qSwitchMode==1: self.qSwitchRadioButton_1.setChecked(True)
     elif self.qSwitchMode==2: self.qSwitchRadioButton_2.setChecked(True)
-    else: print("ERROR. self.qSwitchMode makes no sense");serport.flush();serport.write(b'>s\n'); serport.read(140).decode('utf-8');
+    else: print("ERROR. self.qSwitchMode makes no sense");self.ser.flush();self.ser.write(b'>s\n'); self.ser.read(140).decode('utf-8');
 
   def safeExit(self):
     print(">s")

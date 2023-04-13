@@ -1,17 +1,19 @@
 import sys
 from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
  QWidget, QAction, QTabWidget,QVBoxLayout, QGridLayout, QTabBar, QLineEdit, QTextBrowser)
-#from PyQt5 import QtGui
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import pyqtSlot
 from BigSkyControllerAmbitious import SingleLaserController
 import serial.tools.list_ports
+import ctypes
 
-class App(QMainWindow):
+class BigSkyHub(QMainWindow):
   def __init__(self):
     super().__init__()
     self.setWindowTitle('Big Sky Controller Hub')
-    self.left = 0; self.width = 700
-    self.top = 0 ; self.height = 200
+    self.setWindowIcon(QIcon('BigSkyWindowIcon.png'))
+    self.left = 0; self.width = 900
+    self.top = 0 ; self.height = 800
     self.setGeometry(self.left, self.top, self.width, self.height)
     self.table_widget = MyTableWidget(self)
     self.setCentralWidget(self.table_widget)
@@ -21,32 +23,41 @@ class HomeTab(QWidget):
   def __init__(self,parent):
     super().__init__()
     possibleDevices=[comport.device for comport in serial.tools.list_ports.comports()]
+    print(possibleDevices)
     self.layout = QGridLayout(parent)
     self.buttons=[]
     self.devices=[]
     self.labelLineEdits=[]
     self.processes={}
-    for i in range(10):#for dev in possibleDevices:
-      try:
-        ser = serial.Serial("COM"+str(i),9600,timeout=1)
-        print('trying com port %d'%i)
-      except:
-        print("i="+str(i)+" not this one")
-        #self.buttons[i].setEnabled(False)
-        sn=-1
-      else:
-        print("i="+str(i)+" maybe this one?")
-        ser.flush(); ser.write(b'>sn\n')
-        response = ser.read(140).decode('utf-8'); print("response:", response)
-        if 'number'in response:
-          print("yeah this one."); ser.close()
-          print(response)
-          sn=1#TODO: fix
-      self.devices+=[i]#dev
-      self.buttons+=[QPushButton('launch COM%d ; SN%d'%(self.devices[i],sn))]
+    if len(possibleDevices)==0: #pass. I'm only not passing for development testing purposes
+      print('ayo')
+      self.devices+=['dummy device']; sn=420
+      self.buttons+=[QPushButton('launch %s ; SN%d'%(self.devices[-1],sn))]
       self.labelLineEdits+=[QLineEdit('')]
-      self.layout.addWidget(self.buttons[i], i,0)
-      self.layout.addWidget(self.labelLineEdits[i], i,1)
+      self.layout.addWidget(self.buttons[-1], len(self.buttons)-1, 0)
+      self.layout.addWidget(self.labelLineEdits[-1], len(self.buttons)-1, 1)
+    else:
+      for dev in possibleDevices:
+        try:
+          print('trying com port %s'%dev)
+          ser = serial.Serial(dev,9600,timeout=1)
+        except:
+          print("nope not this one")
+          #self.buttons[i].setEnabled(False)
+          sn=-1
+        else:
+          print(" maybe this one?")
+          ser.flush(); ser.write(b'>sn\n')
+          response = ser.read(140).decode('utf-8'); print("response:", response)
+          if 'number'in response:
+            print("yeah this one."); ser.close()
+            sn=1#TODO: fix
+            sn=int(response.strip('s// number\r\n'))
+            self.devices+=[dev]
+            self.buttons+=[QPushButton('launch %s ; SN %d'%(dev, sn))]
+            self.labelLineEdits+=[QLineEdit('')]
+            self.layout.addWidget(self.buttons[-1], len(self.buttons)-1, 0)
+            self.layout.addWidget(self.labelLineEdits[-1], len(self.buttons)-1, 1)
     self.text = QTextBrowser()
     self.layout.addWidget(self.text, len(self.buttons),0)
     self.saveButton=QPushButton('Save Labels\n(This currently does nothing)')
@@ -68,12 +79,6 @@ class MyTableWidget(QWidget):
       self.homeTab.buttons[i].pressed.connect(lambda i=i: self.createTab(i))
 
     self.tabs.addTab(self.homeTab,"Home")
-    #self.tabs.addTab(self.homeTab,"Home")
-    
-    # Add tabs
-    #self.tabs.addTab(SingleLaserController(labelString='TEST'),"Tab 1")
-    #print("test2: ", self.tabs.widget(1).size().height())
-    #self.tabs.addTab(SingleLaserController(labelString='TEST2'),"Tab 2")
     self.tabs.setTabsClosable(True)
     self.tabs.tabCloseRequested.connect(self.closeTab)
     self.tabs.tabBar().setTabButton(0, QTabBar.RightSide, None) #removes close button from homeTab
@@ -84,7 +89,7 @@ class MyTableWidget(QWidget):
   def createTab(self, i):
     com=self.homeTab.devices[i]; labelString=self.homeTab.labelLineEdits[i].text()
     if labelString=='': labelString='test'+str(self.tabs.count())
-    self.homeTab.text.append("Creating Gui for com%d, with label \'%s\'"%(com,labelString))
+    self.homeTab.text.append("Creating Gui for %s, with label \'%s\'"%(com,labelString))
     self.tabs.addTab(SingleLaserController(cPort=com,labelString=labelString),labelString)
     self.homeTab.buttons[i].setEnabled(False)
   def closeTab(self,i):
@@ -95,8 +100,15 @@ class MyTableWidget(QWidget):
     for j in range(len(self.homeTab.buttons)): #I don't have a good way of identifying which tab number corresponds to which laser...
       if self.homeTab.devices[j]==comport:
         self.homeTab.buttons[j].setEnabled(True); break
+
+  def safeExit(self):
+    for i in range(1, self.tabs.count()):
+      print('safely closing tab %d'%i)
+      self.closeTab(i)
     
 if __name__ == '__main__':
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(u'BigSkyControllerHub')
     app = QApplication(sys.argv)
-    ex = App()
+    window = BigSkyHub()
+    app.aboutToQuit.connect(window.table_widget.safeExit)
     sys.exit(app.exec_())
