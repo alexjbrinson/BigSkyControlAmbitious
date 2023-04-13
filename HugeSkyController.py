@@ -48,7 +48,10 @@ class HomeTab(QWidget):
       self.layout.addWidget(self.buttons[i], i,0)
       self.layout.addWidget(self.labelLineEdits[i], i,1)
     self.text = QTextBrowser()
-    self.layout.addWidget(self.text)
+    self.layout.addWidget(self.text, len(self.buttons),0)
+    self.saveButton=QPushButton('Save Labels\n(This currently does nothing)')
+    self.layout.addWidget(self.saveButton, len(self.buttons),1)
+    self.saveButton.pressed.connect(lambda: self.text.append('bruh...'))
     self.setLayout(self.layout)
     
 class MyTableWidget(QWidget):
