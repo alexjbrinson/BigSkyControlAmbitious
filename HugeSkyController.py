@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
- QWidget, QAction, QTabWidget,QVBoxLayout, QGridLayout, QTabBar, QLineEdit, QPlainTextEdit)
+ QWidget, QAction, QTabWidget,QVBoxLayout, QGridLayout, QTabBar, QLineEdit, QTextBrowser)
 #from PyQt5 import QtGui
 from PyQt5.QtCore import pyqtSlot
 from BigSkyControllerAmbitious import SingleLaserController
@@ -10,7 +10,7 @@ class App(QMainWindow):
   def __init__(self):
     super().__init__()
     self.setWindowTitle('Big Sky Controller Hub')
-    self.left = 0; self.width = 300
+    self.left = 0; self.width = 700
     self.top = 0 ; self.height = 200
     self.setGeometry(self.left, self.top, self.width, self.height)
     self.table_widget = MyTableWidget(self)
@@ -47,7 +47,7 @@ class HomeTab(QWidget):
       self.labelLineEdits+=[QLineEdit('')]
       self.layout.addWidget(self.buttons[i], i,0)
       self.layout.addWidget(self.labelLineEdits[i], i,1)
-    self.text = QPlainTextEdit()
+    self.text = QTextBrowser()
     self.layout.addWidget(self.text)
     self.setLayout(self.layout)
     
@@ -62,7 +62,7 @@ class MyTableWidget(QWidget):
     print("test: ", len(self.homeTab.buttons))
 
     for i in range(len(self.homeTab.buttons)):
-      self.homeTab.buttons[i].pressed.connect(lambda i=i: self.createTab(com=self.homeTab.devices[i],labelString=self.homeTab.labelLineEdits[i].text()))
+      self.homeTab.buttons[i].pressed.connect(lambda i=i: self.createTab(i))
 
     self.tabs.addTab(self.homeTab,"Home")
     #self.tabs.addTab(self.homeTab,"Home")
@@ -78,15 +78,20 @@ class MyTableWidget(QWidget):
     # Add tabs to widget
     self.layout.addWidget(self.tabs)
 
-  def createTab(self,com=-1,labelString=''):
-    print("tejst: com=",com," labelString=",labelString)
+  def createTab(self, i):
+    com=self.homeTab.devices[i]; labelString=self.homeTab.labelLineEdits[i].text()
     if labelString=='': labelString='test'+str(self.tabs.count())
+    self.homeTab.text.append("Creating Gui for com%d, with label \'%s\'"%(com,labelString))
     self.tabs.addTab(SingleLaserController(cPort=com,labelString=labelString),labelString)
-
+    self.homeTab.buttons[i].setEnabled(False)
   def closeTab(self,i):
-    print("Test: closing tab %d"%i)
+    comport=self.tabs.widget(i).comPort
+    self.homeTab.text.append("Closing tab %d aka com%d"%(i,comport))
     self.tabs.widget(i).safeExit()
     self.tabs.removeTab(i)
+    for j in range(len(self.homeTab.buttons)): #I don't have a good way of identifying which tab number corresponds to which laser...
+      if self.homeTab.devices[j]==comport:
+        self.homeTab.buttons[j].setEnabled(True); break
     
 if __name__ == '__main__':
     app = QApplication(sys.argv)
