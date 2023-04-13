@@ -11,10 +11,11 @@ qtCreatorFile = "GuiBigSkyWidget.ui" # Enter file here.
 Ui_Widget, QtBaseClass = uic.loadUiType(qtCreatorFile)
  
 class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
-  def __init__(self, cPort=-1, labelString=''):
+  def __init__(self, cPort=-1, lString=''):
     super().__init__()
     self.setupUi(self)
     self.comPort = cPort
+    self.labelString=lString
 
     self.calibrationFilePresent=False #TODO: check for calibration file based on laser head serial number
 
@@ -22,7 +23,7 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.serialConnected = False
     if self.comPort!=-1:
       try:
-        self.ser = serial.Serial(self.comPort,9600,timeout=1); self.updateTemp()
+        self.ser = serial.Serial(self.comPort,9600,timeout=1); self.fetchSerial()
         tiempo = time.strftime("%d %b %Y %H:%M:%S",time.localtime())#
         self.terminalOutputTextBrowser.append('Connection established at '+str(tiempo))
         self.serialConnected=True
@@ -40,11 +41,29 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.qSwitchMode = 0; self.flashLampMode = 0
     self.activeStatus = 0; self.shutterStatus = 0; self.qSwitchStatus = 0
     self.terminalEnabled = False
-    self.proposedEnergy = 7; self.proposedVoltage = 500; self.proposedFrequency = 0
+    self.proposedEnergy = 7; self.proposedVoltage = 500; self.proposedFrequency = 0; self.fLampVoltage=0
 
    #Initializing GUI values
+
+   #Checking for self.calibration file in local directory
+    try:
+      cwd = os.getcwd()
+      if self.serialConnected:
+        self.calibData=np.loadtxt(cwd+"\\CalibrationDataBigSky"+str(self.serialNumber)+".csv",dtype="float",comments='#',delimiter=',')
+      else: 
+        self.calibData=np.loadtxt(cwd+"\\CalibrationDataBigSky.csv",dtype="float",comments='#',delimiter=',')
+      self.calibVolts = self.calibData[:,0]; self.calibPower = self.calibData[:,1]
+      self.calibrationFilePresent=True
+    except:
+      defaultCalibVolts=[800,900,950,1000,1050,1080]
+      defaultCalibPower=[0.05,1.54,3.09,4.73,6.14,6.78]
+    if self.calibrationFilePresent: print("self.calibration file loaded successfully")
+    else: print("failed to load self.calibration file"); self.calibVolts=defaultCalibVolts; self.calibPower=defaultCalibPower 
+    self.PowerEstimateValue.setText('%.2f'%np.interp(self.fLampVoltage,self.calibVolts,self.calibPower)+" W")
+
     if self.serialConnected:
-      self.fetchSerial(); self.label.setText(labelString)#("BIG SKY " + str(self.comPort) + " LASER CONTROL")
+      self.label.setText(self.labelString)#("BIG SKY " + str(self.comPort) + " LASER CONTROL")
+      self.updateTemp()
       self.update_fLampMode()
       self.update_qSwitchMode()
       #self.update_fLampValues()
@@ -76,21 +95,7 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.terminalInputLineEdit.returnPressed.connect(self.sendTerminalCommand)
     self.terminalInputLabel.setEnabled(False); self.terminalInputLineEdit.setEnabled(False)
 
-    #Checking for self.calibration file in local directory
-    try:
-      cwd = os.getcwd()
-      if self.serialConnected:
-        self.calibData=np.loadtxt(cwd+"\\CalibrationDataBigSky"+str(self.serialNumber)+".csv",dtype="float",comments='#',delimiter=',')
-      else: 
-        self.calibData=np.loadtxt(cwd+"\\CalibrationDataBigSky.csv",dtype="float",comments='#',delimiter=',')
-      self.calibVolts = self.calibData[:,0]; self.calibPower = self.calibData[:,1]
-      self.calibrationFilePresent=True
-    except:
-      defaultCalibVolts=[800,900,950,1000,1050,1080]
-      defaultCalibPower=[0.05,1.54,3.09,4.73,6.14,6.78]
-    if self.calibrationFilePresent: print("self.calibration file loaded successfully")
-    else: print("failed to load self.calibration file"); self.calibVolts=defaultCalibVolts; self.calibPower=defaultCalibPower 
-    self.PowerEstimateValue.setText('%.2f'%np.interp(self.fLampVoltage,self.calibVolts,self.calibPower)+" W")   
+     
 
   def setFrequency(self):
     self.proposedFrequency = float(self.frequencyDoubleSpinBox.value())

@@ -6,6 +6,7 @@ from PyQt5.QtCore import pyqtSlot
 from BigSkyControllerAmbitious import SingleLaserController
 import serial.tools.list_ports
 import ctypes
+import pickle
 
 class BigSkyHub(QMainWindow):
   def __init__(self):
@@ -24,9 +25,13 @@ class HomeTab(QWidget):
     super().__init__()
     possibleDevices=[comport.device for comport in serial.tools.list_ports.comports()]
     print(possibleDevices)
+    try:
+        with open('laserNames.pkl','rb') as file: self.laserNames=pickle.load(file); file.close()
+    except: self.laserNames={}
     self.layout = QGridLayout(parent)
     self.buttons=[]
     self.devices=[]
+    self.serialNumbers=[]
     self.labelLineEdits=[]
     self.processes={}
     if len(possibleDevices)==0: #pass. I'm only not passing for development testing purposes
@@ -51,19 +56,26 @@ class HomeTab(QWidget):
           response = ser.read(140).decode('utf-8'); print("response:", response)
           if 'number'in response:
             print("yeah this one."); ser.close()
-            sn=1#TODO: fix
-            sn=int(response.strip('s// number\r\n'))
+            sn=response.strip('s// number\r\n')
+            self.serialNumbers+=[sn]
             self.devices+=[dev]
-            self.buttons+=[QPushButton('launch %s ; SN %d'%(dev, sn))]
-            self.labelLineEdits+=[QLineEdit('')]
+            self.buttons+=[QPushButton('launch %s ; SN %s'%(dev, sn))]
+            if sn in self.laserNames.keys(): self.labelLineEdits+=[QLineEdit(self.laserNames[sn])]
+            else: self.labelLineEdits+=[QLineEdit('')]
             self.layout.addWidget(self.buttons[-1], len(self.buttons)-1, 0)
             self.layout.addWidget(self.labelLineEdits[-1], len(self.buttons)-1, 1)
     self.text = QTextBrowser()
     self.layout.addWidget(self.text, len(self.buttons),0)
-    self.saveButton=QPushButton('Save Labels\n(This currently does nothing)')
+    self.saveButton=QPushButton('Save Labels')
     self.layout.addWidget(self.saveButton, len(self.buttons),1)
-    self.saveButton.pressed.connect(lambda: self.text.append('bruh...'))
+    self.saveButton.pressed.connect(self.saveLabels)
+    #self.saveButton.pressed.connect(lambda: self.text.append('bruh...'))
     self.setLayout(self.layout)
+  def saveLabels(self):
+    for i in range(len(self.buttons)):
+      self.laserNames[self.serialNumbers[i]]=self.labelLineEdits[i].text()
+    with open('laserNames.pkl','wb') as file: pickle.dump(self.laserNames, file); file.close()
+    self.text.append('laser names saved to file.')
     
 class MyTableWidget(QWidget):
   def __init__(self, parent):
@@ -82,7 +94,6 @@ class MyTableWidget(QWidget):
     self.tabs.setTabsClosable(True)
     self.tabs.tabCloseRequested.connect(self.closeTab)
     self.tabs.tabBar().setTabButton(0, QTabBar.RightSide, None) #removes close button from homeTab
-    #self.tabs.tabBar().setTabButton(0, self.tabs.tabBar.RightSide, None)
     # Add tabs to widget
     self.layout.addWidget(self.tabs)
 
@@ -90,11 +101,12 @@ class MyTableWidget(QWidget):
     com=self.homeTab.devices[i]; labelString=self.homeTab.labelLineEdits[i].text()
     if labelString=='': labelString='test'+str(self.tabs.count())
     self.homeTab.text.append("Creating Gui for %s, with label \'%s\'"%(com,labelString))
-    self.tabs.addTab(SingleLaserController(cPort=com,labelString=labelString),labelString)
+    self.tabs.addTab(SingleLaserController(cPort=com,lString=labelString),labelString)
     self.homeTab.buttons[i].setEnabled(False)
   def closeTab(self,i):
     comport=self.tabs.widget(i).comPort
-    self.homeTab.text.append("Closing tab %d aka com%s"%(i,comport))
+    label=self.tabs.widget(i).labelString
+    self.homeTab.text.append("Closing tab %d aka %s"%(i,label))
     self.tabs.widget(i).safeExit()
     self.tabs.removeTab(i)
     for j in range(len(self.homeTab.buttons)): #I don't have a good way of identifying which tab number corresponds to which laser...
