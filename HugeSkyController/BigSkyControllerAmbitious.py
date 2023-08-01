@@ -288,8 +288,8 @@ class SingleLaserController(QtWidgets.QWidget, Ui_Widget):
     self.frequencyDoubleSpinBox.setEnabled(frequencyBoolean); self.FrequencyLabel.setEnabled(frequencyBoolean); self.frequencyConfirmationButton.setEnabled(frequencyBoolean)
     #self.flashLampEnergyLabel.setEnabled(not(self.terminalEnabled)); self.fLampEnergyConfirmationButton.setEnabled(not(self.terminalEnabled));
     #self.flashLampEnergyHorizontalSlider.setEnabled(not(self.terminalEnabled)); self.flashLampEnergyDoubleSpinBox.setEnabled(not(self.terminalEnabled));
-    self.flashLampVoltageLabel.setEnabled(not(self.terminalEnabled)); self.fLampVoltageConfirmationButton.setEnabled(not(self.terminalEnabled));
-    self.flashLampVoltageHorizontalSlider.setEnabled(not(self.terminalEnabled)); self.flashLampVoltageSpinBox.setEnabled(not(self.terminalEnabled));
+    self.flashLampVoltageLabel.setEnabled(not(self.terminalEnabled)); #self.fLampVoltageConfirmationButton.setEnabled(not(self.terminalEnabled));
+    #self.flashLampVoltageHorizontalSlider.setEnabled(not(self.terminalEnabled)); self.flashLampVoltageSpinBox.setEnabled(not(self.terminalEnabled));
 
   def fetchSerial(self):
     print(">sn"); self.terminalOutputTextBrowser.append("<p style='color: black'>"+'>sn'+"</p>");
